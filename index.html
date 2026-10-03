@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stockify</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="floating-icon icon1">🔧</div>
+  <div class="floating-icon icon2">⚙️</div>
+  <div class="floating-icon icon3">🔩</div>
+  <div class="floating-icon icon4">🛠️</div>   
+  <div class="floating-icon icon1">🔧</div>
+  <div class="floating-icon icon2">⚙️</div>
+  <div class="floating-icon icon3">🔩</div>
+  <div class="floating-icon icon4">🛠️</div>
+  <div class="floating-icon icon5">⚙️</div>
+  <div class="floating-icon icon6">🔧</div>
+  <div class="floating-icon icon7">🔩</div>
+  <div class="floating-icon icon8">🛠️</div>
+
+  <section id="login-screen">
+   <h1>Stocckify</h1>
+   <h2>Sign in</h2>
+   <label for="email">Email</label>
+   <input id="email" type="email" placeholder="example@email.com" required>  
+
+   <label for="password">Password</label>
+   <input id="password" type="password" placeholder="Enter your password" required>
+   <p id="login-message"></p>
+   <button id="login-btn" type="button">Create account</button>
+
+   </section>
+
+    <section id="home-screen" class="hidden">
+      <div class="app-header">
+        <span class="app-logo">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5"/>
+            <path d="M5.5 10v9.5a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1V10"/>
+          </svg>
+        </span>
+        <h1>Stockify</h1>
+        <button id="logout-btn">Sign out</button>
+      </div>
+
+      <div id="total-quantity-box">
+        <div id="total-quantity-number">0</div>
+        <div>Total items</div>
+      </div>
+      <div id="parts-list"></div>
+      <button id="add-part-btn" type="button">+ Add part</button>
+      <button id="view-history-btn" type="button">View history</button>
+   </section>
+
+   <section id="history-screen" class="hidden">
+  <div class="history-header">
+    <h1>History</h1>
+    <button id="clear-history-btn" type="button">🗑️</button>
+  </div>
+  <div id="history-list"></div>
+  <button id="delete-selected-btn" type="button" class="hidden">Delete selected</button>
+</section>
+
+   <div id="part-popup" class="hidden">
+  <h2>Add part</h2>
+
+  <label for="part-name">Part name</label>
+  <input id="part-name" type="text" placeholder="e.g. Brake pad set" required>
+
+  <label for="part-qty">Quantity</label>
+  <input id="part-qty" type="number" placeholder="0" required>
+
+  <label for="part-buy">Purchase price</label>
+  <input id="part-buy" type="number" placeholder="0" required>
+
+  <label for="part-sell">Sale price</label>
+  <input id="part-sell" type="number" placeholder="0" required>
+
+  <button id="part-save-btn" type="button">Save</button>
+  <button id="part-cancel-btn" type="button">Cancel</button>
+  </div>
+
+  <div id="edit-popup" class="hidden">
+  <h2>Edit part</h2>
+
+  <label for="edit-name">Part name</label>
+  <input id="edit-name" type="text" required>
+
+  <label for="edit-qty">Quantity</label>
+  <input id="edit-qty" type="number" required>
+
+  <label for="edit-buy">Purchase price</label>
+  <input id="edit-buy" type="number" required>
+
+  <label for="edit-sell">Sale price</label>
+  <input id="edit-sell" type="number" required>
+
+  <button id="edit-save-btn" type="button">Save changes</button>
+  <button id="edit-delete-btn" type="button">Delete part</button>
+  <button id="edit-cancel-btn" type="button">Cancel</button>
+</div>
+
+  <div id="stock-popup" class="hidden">
+  <h2 id="stock-popup-title">Stock in</h2>
+  <p id="stock-popup-info"></p>
+
+  <label for="stock-qty">Quantity</label>
+  <input id="stock-qty" type="number" placeholder="0" required>
+
+  <div id="price-paid-section" class="hidden">
+    <label for="price-paid">Price actually paid (per piece)</label>
+    <input id="price-paid" type="number" placeholder="0" required>
+  </div>
+
+  <button id="stock-confirm-btn" type="button">Confirm</button>
+  <button id="stock-cancel-btn" type="button">Cancel</button>
+</div>
+
+   <div id="popup" class="hidden">
+      <p id="popup-text"></p>
+   </div>
+   <script src="app.js"></script>
+</body>
+</html>
