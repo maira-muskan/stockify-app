@@ -330,3 +330,10 @@ button {
     color: #a3a09a;
   }
 }
+#forgot-password-link {
+  text-align: center;
+  color: #c2641d;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 10px;
+}

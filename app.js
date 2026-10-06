@@ -1,9 +1,5 @@
-async function hashPassword(password) {
-  const data = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 function showPopup(message, callback) {
   popupText.textContent = message;
@@ -15,87 +11,154 @@ function showPopup(message, callback) {
   }, 1500);
 }
 
-function renderParts() {
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
+// Loads one part (only if it belongs to the signed-in user)
+async function getPartById(id) {
+  const snap = await getDoc(doc(window.db, "parts", id));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  if (data.userId !== window.auth.currentUser.uid) return null;
+  return data;
+}
+
+async function renderParts() {
   const partsListEl = document.getElementById("parts-list");
   const totalQtyNumber = document.getElementById("total-quantity-number");
 
-  partsListEl.innerHTML = "";
+  if (!navigator.onLine) {
+    partsListEl.innerHTML = "<p>No internet connection. Please reconnect and reload.</p>";
+    return;
+  }
 
-  parts.forEach(function (part, index) {
-    const card = document.createElement("div");
-    card.className = "part-card";
-    card.innerHTML = `
-  <strong class="part-name-btn" data-index="${index}">${part.name}</strong><br>
-  Quantity: ${part.quantity}<br>
-  Buy: ${part.buyPrice} | Sell: ${part.sellPrice}<br>
-  <button class="stock-in-btn" data-index="${index}">+ Stock in</button>
-  <button class="stock-out-btn" data-index="${index}">- Stock out</button>
-  `;
-    partsListEl.appendChild(card);
-  });
+  partsListEl.innerHTML = "Loading...";
 
-  totalQtyNumber.textContent = parts.length;
+  const user = window.auth.currentUser;
+  if (!user) return;
+
+  try {
+    const q = query(collection(window.db, "parts"), where("userId", "==", user.uid));
+    const snapshot = await getDocs(q);
+
+    partsListEl.innerHTML = "";
+    let count = 0;
+
+    snapshot.forEach(function (docSnap) {
+      const part = docSnap.data();
+      const id = docSnap.id;
+      count++;
+
+      const card = document.createElement("div");
+      card.className = "part-card";
+      card.innerHTML = `
+        <strong class="part-name-btn" data-id="${id}">${part.name}</strong><br>
+        Quantity: ${part.quantity}<br>
+        Buy: ${part.buyPrice} | Sell: ${part.sellPrice}<br>
+        <button class="stock-in-btn" data-id="${id}">+ Stock in</button>
+        <button class="stock-out-btn" data-id="${id}">- Stock out</button>
+      `;
+      partsListEl.appendChild(card);
+    });
+
+    totalQtyNumber.textContent = count;
+  } catch (error) {
+    partsListEl.innerHTML = "<p>Could not load parts. Please try again.</p>";
+    console.log("renderParts error:", error);
+  }
 }
 
-function openStockPopup(title) {
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
-  const part = parts[currentPartIndex];
-
+async function openStockPopup(title) {
   stockPopupTitle.textContent = title;
-  stockPopupInfo.textContent = part.name + " — Current quantity: " + part.quantity;
+  stockPopupInfo.textContent = "Loading...";
   stockQtyInput.value = "";
 
   if (currentAction === "out") {
     priceePaidSection.classList.remove("hidden");
-    pricePaidInput.value = part.sellPrice;
   } else {
     priceePaidSection.classList.add("hidden");
   }
   stockPopup.classList.remove("hidden");
+
+  try {
+    const part = await getPartById(currentPartId);
+    if (!part) {
+      stockPopupInfo.textContent = "Part not found.";
+      return;
+    }
+    stockPopupInfo.textContent = part.name + " — Current quantity: " + part.quantity;
+    if (currentAction === "out") {
+      pricePaidInput.value = part.sellPrice;
+    }
+  } catch (error) {
+    stockPopupInfo.textContent = "Could not load part.";
+    console.log("openStockPopup error:", error);
+  }
 }
 
-function renderHistory() {
-  const transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+async function renderHistory() {
   const historyList = document.getElementById("history-list");
-  historyList.innerHTML = "";
 
-  transactions.slice().reverse().forEach(function (t, reversedIndex) {
-    const realIndex = transactions.length - 1 - reversedIndex;
+  if (!navigator.onLine) {
+    historyList.innerHTML = "<p>No internet connection. Please reconnect and reload.</p>";
+    return;
+  }
 
-    const item = document.createElement("div");
-    item.className = "history-item";
+  historyList.innerHTML = "Loading...";
 
-    let contentHTML = "";
-    if (t.action === "in") {
-      contentHTML = `
-        <strong>${t.partName}</strong> + ${t.quantity}<br>
-        <small>Stocked in · ${t.date}</small>
+  const user = window.auth.currentUser;
+  if (!user) return;
+
+  try {
+    const q = query(collection(window.db, "transactions"), where("userId", "==", user.uid));
+    const snapshot = await getDocs(q);
+
+    const transactions = [];
+    snapshot.forEach(function (docSnap) {
+      transactions.push({ id: docSnap.id, ...docSnap.data() });
+    });
+
+    transactions.sort(function (a, b) {
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    historyList.innerHTML = "";
+
+    transactions.forEach(function (t) {
+      const item = document.createElement("div");
+      item.className = "history-item";
+
+      let contentHTML = "";
+      if (t.action === "in") {
+        contentHTML = `
+          <strong>${t.partName}</strong> + ${t.quantity}<br>
+          <small>Stocked in · ${t.date}</small>
+        `;
+      } else {
+        contentHTML = `
+          <strong>${t.partName}</strong> - ${t.quantity}<br>
+          <small>Declared: ${t.declaredPrice} · Paid: ${t.pricePaid}</small><br>
+          <small>Profit: ${t.profit}</small><br>
+          <small>${t.date}</small>
+        `;
+      }
+
+      item.innerHTML = `
+        <input type="checkbox" class="history-checkbox hidden" data-id="${t.id}">
+        ${contentHTML}
       `;
-    } else {
-      contentHTML = `
-        <strong>${t.partName}</strong> - ${t.quantity}<br>
-        <small>Declared: ${t.declaredPrice} · Paid: ${t.pricePaid}</small><br>
-        <small>Profit: ${t.profit}</small><br>
-        <small>${t.date}</small>
-      `;
-    }
 
-    item.innerHTML = `
-      <input type="checkbox" class="history-checkbox hidden" data-index="${realIndex}">
-      ${contentHTML}
-    `;
-
-    historyList.appendChild(item);
-  });
+      historyList.appendChild(item);
+    });
+  } catch (error) {
+    historyList.innerHTML = "<p>Could not load history. Please try again.</p>";
+    console.log("renderHistory error:", error);
+  }
 }
 
 console.log("app.js loaded");
 
 const loginMessage = document.getElementById("login-message");
 const loginBtn = document.getElementById("login-btn");
-const loginScreen = document.getElementById("login-screen");  
-const homeScreen = document.getElementById("home-screen"); 
+const loginScreen = document.getElementById("login-screen");
+const homeScreen = document.getElementById("home-screen");
 const popup = document.getElementById("popup");
 const popupText = document.getElementById("popup-text");
 
@@ -131,11 +194,19 @@ const editCancelBtn = document.getElementById("edit-cancel-btn");
 const clearHistoryBtn = document.getElementById("clear-history-btn");
 const deleteSelectedBtn = document.getElementById("delete-selected-btn");
 
-let currentPartIndex = null;
+const logoutBtn = document.getElementById("logout-btn");
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+
+let currentPartId = null;
 let currentAction = null;
 let selectMode = false;
 
 loginBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection. Please connect and try again.");
+    return;
+  }
+
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
 
@@ -149,34 +220,64 @@ loginBtn.addEventListener("click", async function () {
     return;
   }
 
-  const email = emailInput.value;
+  const email = emailInput.value.trim();
   const password = passwordInput.value;
-  const hashedPassword = await hashPassword(password);
 
-  const savedEmail = localStorage.getItem("email");
-  const savedPassword = localStorage.getItem("password");
-
-  if (!savedEmail) {
-    localStorage.setItem("email", email);
-    localStorage.setItem("password", hashedPassword);
+  try {
+    await createUserWithEmailAndPassword(window.auth, email, password);
     showPopup("Account created successfully!", function () {
       loginScreen.classList.add("hidden");
       homeScreen.classList.remove("hidden");
       renderParts();
     });
-
-  } else {
-    if (email === savedEmail && hashedPassword === savedPassword) {
-      showPopup("Sign in successful!", function () {
-        loginScreen.classList.add("hidden");
-        homeScreen.classList.remove("hidden");
-        renderParts();
-      });
+  } catch (error) {
+    if (error.code === "auth/email-already-in-use") {
+      try {
+        await signInWithEmailAndPassword(window.auth, email, password);
+        showPopup("Sign in successful!", function () {
+          loginScreen.classList.add("hidden");
+          homeScreen.classList.remove("hidden");
+          renderParts();
+        });
+      } catch (signInError) {
+        showPopup("Wrong email or password.");
+      }
+    } else if (error.code === "auth/weak-password") {
+      showPopup("Password must be at least 6 characters.");
+    } else if (error.code === "auth/invalid-email") {
+      showPopup("Please enter a valid email.");
     } else {
-      showPopup("Wrong email or password.");
+      showPopup("Error: " + error.message);
     }
   }
 });
+
+if (forgotPasswordLink) {
+  forgotPasswordLink.addEventListener("click", async function () {
+    if (!navigator.onLine) {
+      showPopup("No internet connection.");
+      return;
+    }
+
+    const email = document.getElementById("email").value.trim();
+
+    if (!email) {
+      showPopup("Please type your email first, then click 'Forgot password?'");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(window.auth, email);
+      showPopup("If an account exists, a reset email has been sent. Check your inbox and spam.");
+    } catch (error) {
+      if (error.code === "auth/invalid-email") {
+        showPopup("Please enter a valid email.");
+      } else {
+        showPopup("Error: " + error.message);
+      }
+    }
+  });
+}
 
 addPartBtn.addEventListener("click", function () {
   partPopup.classList.remove("hidden");
@@ -186,60 +287,77 @@ partCancelBtn.addEventListener("click", function () {
   partPopup.classList.add("hidden");
 });
 
-partSaveBtn.addEventListener("click", function () {
+partSaveBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
+    return;
+  }
+
   const nameInput = document.getElementById("part-name");
   const qtyInput = document.getElementById("part-qty");
   const buyInput = document.getElementById("part-buy");
   const sellInput = document.getElementById("part-sell");
 
- const fields = [nameInput, qtyInput, buyInput, sellInput];
-for (const field of fields) {
-  if (!field.checkValidity()) {
-    field.reportValidity();
+  const fields = [nameInput, qtyInput, buyInput, sellInput];
+  for (const field of fields) {
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      return;
+    }
+  }
+
+  const user = window.auth.currentUser;
+
+  try {
+    await addDoc(collection(window.db, "parts"), {
+      userId: user.uid,
+      name: nameInput.value,
+      quantity: Number(qtyInput.value),
+      buyPrice: Number(buyInput.value),
+      sellPrice: Number(sellInput.value)
+    });
+  } catch (error) {
+    showPopup("Could not save part: " + error.message);
     return;
   }
-}
 
-  const newPart = {
-    name: nameInput.value,
-    quantity: Number(qtyInput.value),
-    buyPrice: Number(buyInput.value),
-    sellPrice: Number(sellInput.value)
-  };
-
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
-  parts.push(newPart);
-  localStorage.setItem("parts", JSON.stringify(parts));
-
-  console.log("Part saved:", newPart);
-  console.log("All parts:", parts);
+  nameInput.value = "";
+  qtyInput.value = "";
+  buyInput.value = "";
+  sellInput.value = "";
 
   renderParts();
   partPopup.classList.add("hidden");
 });
 
-partsList.addEventListener("click", function (event) {
+partsList.addEventListener("click", async function (event) {
   if (event.target.classList.contains("stock-in-btn")) {
-    currentPartIndex = event.target.dataset.index;
+    currentPartId = event.target.dataset.id;
     currentAction = "in";
     openStockPopup("Stock in");
   }
-  
+
   if (event.target.classList.contains("stock-out-btn")) {
-    currentPartIndex = event.target.dataset.index;
+    currentPartId = event.target.dataset.id;
     currentAction = "out";
     openStockPopup("Stock out");
   }
 
   if (event.target.classList.contains("part-name-btn")) {
-    currentPartIndex = event.target.dataset.index;
-    const parts = JSON.parse(localStorage.getItem("parts")) || [];
-    const part = parts[currentPartIndex];
+    currentPartId = event.target.dataset.id;
 
-    editNameInput.value = part.name;
-    editQtyInput.value = part.quantity;
-    editBuyInput.value = part.buyPrice;
-    editSellInput.value = part.sellPrice;
+    try {
+      const part = await getPartById(currentPartId);
+      if (part) {
+        editNameInput.value = part.name;
+        editQtyInput.value = part.quantity;
+        editBuyInput.value = part.buyPrice;
+        editSellInput.value = part.sellPrice;
+      }
+    } catch (error) {
+      showPopup("Could not load part.");
+      return;
+    }
 
     editPopup.classList.remove("hidden");
   }
@@ -249,58 +367,67 @@ stockCancelBtn.addEventListener("click", function () {
   stockPopup.classList.add("hidden");
 });
 
-stockConfirmBtn.addEventListener("click", function () {
+stockConfirmBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
+    return;
+  }
+
   if (!stockQtyInput.checkValidity() || stockQtyInput.value === "") {
     stockQtyInput.reportValidity();
     return;
   }
 
   const enteredQty = Number(stockQtyInput.value);
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
-  const part = parts[currentPartIndex];
+  const partRef = doc(window.db, "parts", currentPartId);
 
-  if (currentAction === "in") {
-    part.quantity += enteredQty;
+  try {
+    const part = await getPartById(currentPartId);
+    if (!part) return;
 
-    const transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-    transactions.push({
-      partName: part.name,
-      action: "in",
-      quantity: enteredQty,
-      date: new Date().toLocaleString()
-    });
-    localStorage.setItem("transactions", JSON.stringify(transactions));
+    if (currentAction === "in") {
+      await updateDoc(partRef, { quantity: part.quantity + enteredQty });
 
-  } else if (currentAction === "out") {
-    if (enteredQty > part.quantity) {
-      alert("Only " + part.quantity + " in stock.");
-      return;
+      await addDoc(collection(window.db, "transactions"), {
+        userId: window.auth.currentUser.uid,
+        partName: part.name,
+        action: "in",
+        quantity: enteredQty,
+        date: new Date().toLocaleString()
+      });
+
+    } else if (currentAction === "out") {
+      if (enteredQty > part.quantity) {
+        alert("Only " + part.quantity + " in stock.");
+        return;
+      }
+
+      if (!pricePaidInput.checkValidity() || pricePaidInput.value === "") {
+        pricePaidInput.reportValidity();
+        return;
+      }
+
+      const pricePaid = Number(pricePaidInput.value);
+      const profit = (pricePaid - part.buyPrice) * enteredQty;
+
+      await updateDoc(partRef, { quantity: part.quantity - enteredQty });
+
+      await addDoc(collection(window.db, "transactions"), {
+        userId: window.auth.currentUser.uid,
+        partName: part.name,
+        action: "out",
+        quantity: enteredQty,
+        declaredPrice: part.sellPrice,
+        pricePaid: pricePaid,
+        profit: profit,
+        date: new Date().toLocaleString()
+      });
     }
-
-    if (!pricePaidInput.checkValidity() || pricePaidInput.value === "") {
-      pricePaidInput.reportValidity();
-      return;
-    }
-
-    const pricePaid = Number(pricePaidInput.value);
-    const profit = (pricePaid - part.buyPrice) * enteredQty;
-
-    part.quantity -= enteredQty;
-
-    const transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-    transactions.push({
-      partName: part.name,
-      action: "out",
-      quantity: enteredQty,
-      declaredPrice: part.sellPrice,
-      pricePaid: pricePaid,
-      profit: profit,
-      date: new Date().toLocaleString()
-    });
-    localStorage.setItem("transactions", JSON.stringify(transactions));
+  } catch (error) {
+    showPopup("Something went wrong: " + error.message);
+    return;
   }
 
-  localStorage.setItem("parts", JSON.stringify(parts));
   renderParts();
   stockPopup.classList.add("hidden");
 });
@@ -316,33 +443,54 @@ editCancelBtn.addEventListener("click", function () {
   editPopup.classList.add("hidden");
 });
 
-editSaveBtn.addEventListener("click", function () {
-  if (!editNameInput.checkValidity() || !editQtyInput.checkValidity() || !editBuyInput.checkValidity() || !editSellInput.checkValidity()) {
-    editNameInput.reportValidity();
+editSaveBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
     return;
   }
 
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
-  parts[currentPartIndex] = {
-    name: editNameInput.value,
-    quantity: Number(editQtyInput.value),
-    buyPrice: Number(editBuyInput.value),
-    sellPrice: Number(editSellInput.value)
-  };
+  const editFields = [editNameInput, editQtyInput, editBuyInput, editSellInput];
+  for (const field of editFields) {
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      return;
+    }
+  }
 
-  localStorage.setItem("parts", JSON.stringify(parts));
+  const partRef = doc(window.db, "parts", currentPartId);
+
+  try {
+    await updateDoc(partRef, {
+      name: editNameInput.value,
+      quantity: Number(editQtyInput.value),
+      buyPrice: Number(editBuyInput.value),
+      sellPrice: Number(editSellInput.value)
+    });
+  } catch (error) {
+    showPopup("Could not save changes: " + error.message);
+    return;
+  }
+
   renderParts();
   editPopup.classList.add("hidden");
 });
 
-editDeleteBtn.addEventListener("click", function () {
+editDeleteBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
+    return;
+  }
+
   const confirmDelete = confirm("Delete this part? This cannot be undone.");
   if (!confirmDelete) return;
 
-  const parts = JSON.parse(localStorage.getItem("parts")) || [];
-  parts.splice(currentPartIndex, 1);
+  try {
+    await deleteDoc(doc(window.db, "parts", currentPartId));
+  } catch (error) {
+    showPopup("Could not delete part: " + error.message);
+    return;
+  }
 
-  localStorage.setItem("parts", JSON.stringify(parts));
   renderParts();
   editPopup.classList.add("hidden");
 });
@@ -358,7 +506,12 @@ clearHistoryBtn.addEventListener("click", function () {
   deleteSelectedBtn.classList.toggle("hidden", !selectMode);
 });
 
-deleteSelectedBtn.addEventListener("click", function () {
+deleteSelectedBtn.addEventListener("click", async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
+    return;
+  }
+
   const checkedBoxes = document.querySelectorAll(".history-checkbox:checked");
   if (checkedBoxes.length === 0) {
     alert("Select at least one transaction to delete.");
@@ -368,20 +521,20 @@ deleteSelectedBtn.addEventListener("click", function () {
   const confirmDelete = confirm("Delete " + checkedBoxes.length + " transaction(s)?");
   if (!confirmDelete) return;
 
-  const indexesToDelete = Array.from(checkedBoxes).map(function (box) {
-    return Number(box.dataset.index);
-  });
+  try {
+    for (const box of checkedBoxes) {
+      await deleteDoc(doc(window.db, "transactions", box.dataset.id));
+    }
+  } catch (error) {
+    showPopup("Could not delete: " + error.message);
+    return;
+  }
 
-  const transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-  const updatedTransactions = transactions.filter(function (t, index) {
-    return !indexesToDelete.includes(index);
-  });
-
-  localStorage.setItem("transactions", JSON.stringify(updatedTransactions));
   selectMode = false;
   deleteSelectedBtn.classList.add("hidden");
   renderHistory();
 });
+
 window.addEventListener("popstate", function () {
   if (!historyScreen.classList.contains("hidden")) {
     historyScreen.classList.add("hidden");
@@ -389,12 +542,35 @@ window.addEventListener("popstate", function () {
   }
 });
 
-const logoutBtn = document.getElementById("logout-btn");
-
-logoutBtn.addEventListener("click", function () {
+logoutBtn.addEventListener("click", async function () {
+  try {
+    await signOut(window.auth);
+  } catch (error) {
+    console.log("Sign out error:", error);
+  }
   homeScreen.classList.add("hidden");
   historyScreen.classList.add("hidden");
   loginScreen.classList.remove("hidden");
   document.getElementById("email").value = "";
   document.getElementById("password").value = "";
 });
+function startAuthListener() {
+  if (!window.auth) {
+    setTimeout(startAuthListener, 50);
+    return;
+  }
+
+  onAuthStateChanged(window.auth, function (user) {
+    if (user) {
+      loginScreen.classList.add("hidden");
+      homeScreen.classList.remove("hidden");
+      renderParts();
+    } else {
+      homeScreen.classList.add("hidden");
+      historyScreen.classList.add("hidden");
+      loginScreen.classList.remove("hidden");
+    }
+  });
+}
+
+startAuthListener();

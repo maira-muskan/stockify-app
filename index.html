@@ -21,7 +21,7 @@
   <div class="floating-icon icon8">🛠️</div>
 
   <section id="login-screen">
-   <h1>Stocckify</h1>
+   <h1>Stockify</h1>
    <h2>Sign in</h2>
    <label for="email">Email</label>
    <input id="email" type="email" placeholder="example@email.com" required>  
@@ -30,6 +30,7 @@
    <input id="password" type="password" placeholder="Enter your password" required>
    <p id="login-message"></p>
    <button id="login-btn" type="button">Create account</button>
+   <p id="forgot-password-link">Forgot password?</p>
 
    </section>
 
@@ -121,6 +122,24 @@
    <div id="popup" class="hidden">
       <p id="popup-text"></p>
    </div>
-   <script src="app.js"></script>
+   <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB55vpvtTEqlRHi4twDC_WBg4xINryHXGQ",
+    authDomain: "stockify-49b4c.firebaseapp.com",
+    projectId: "stockify-49b4c",
+    storageBucket: "stockify-49b4c.firebasestorage.app",
+    messagingSenderId: "596242280894",
+    appId: "1:596242280894:web:de423a1d3a47d947b889ef"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window.auth = getAuth(app);
+  window.db = getFirestore(app);
+</script>
+   <script type="module" src="app.js"></script>
 </body>
 </html>
