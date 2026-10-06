@@ -59,6 +59,7 @@ async function renderParts() {
     });
 
     totalQtyNumber.textContent = count;
+    renderSummary();
   } catch (error) {
     partsListEl.innerHTML = "<p>Could not load parts. Please try again.</p>";
     console.log("renderParts error:", error);
@@ -90,6 +91,40 @@ async function openStockPopup(title) {
   } catch (error) {
     stockPopupInfo.textContent = "Could not load part.";
     console.log("openStockPopup error:", error);
+  }
+}
+
+// Counts sales (stock-out transactions), adds up the money received and the profit
+async function renderSummary() {
+  const salesCountEl = document.getElementById("sales-count");
+  const salesAmountEl = document.getElementById("sales-amount");
+  const totalProfitEl = document.getElementById("total-profit");
+
+  const user = window.auth.currentUser;
+  if (!user || !navigator.onLine) return;
+
+  try {
+    const q = query(collection(window.db, "transactions"), where("userId", "==", user.uid));
+    const snapshot = await getDocs(q);
+
+    let sales = 0;
+    let amount = 0;
+    let profit = 0;
+    snapshot.forEach(function (docSnap) {
+      const t = docSnap.data();
+      if (t.action === "out") {
+        sales++;
+        amount += (Number(t.pricePaid) || 0) * (Number(t.quantity) || 0);
+        profit += Number(t.profit) || 0;
+      }
+    });
+
+    salesCountEl.textContent = sales;
+    salesAmountEl.textContent = amount.toLocaleString();
+    totalProfitEl.textContent = profit.toLocaleString();
+    totalProfitEl.classList.toggle("negative", profit < 0);
+  } catch (error) {
+    console.log("renderSummary error:", error);
   }
 }
 
@@ -572,6 +607,7 @@ deleteSelectedBtn.addEventListener("click", async function () {
   selectMode = false;
   deleteSelectedBtn.classList.add("hidden");
   renderHistory();
+  renderSummary();
 });
 
 window.addEventListener("popstate", function () {
@@ -593,6 +629,9 @@ logoutBtn.addEventListener("click", async function () {
   document.getElementById("email").value = "";
   document.getElementById("password").value = "";
   setAuthMode("signin");
+  document.getElementById("sales-count").textContent = "0";
+  document.getElementById("sales-amount").textContent = "0";
+  document.getElementById("total-profit").textContent = "0";
 });
 
 // Stay signed in: Firebase remembers the user, so show the right screen on load.

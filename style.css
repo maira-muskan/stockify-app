@@ -347,3 +347,38 @@ button {
   cursor: pointer;
   text-decoration: underline;
 }
+#switch-mode-text {
+  text-align: center;
+  margin-top: 14px;
+}
+
+#switch-mode-link {
+  color: #c2641d;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+#sales-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: #1f1f1f;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #bbb;
+}
+
+#sales-summary .stat-value {
+  color: #e08a3c;
+  font-weight: bold;
+}
+
+#sales-summary .stat-profit {
+  color: #6fcf97;
+}
+
+#sales-summary .stat-profit.negative {
+  color: #ff6b6b;
+}
