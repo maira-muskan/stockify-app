@@ -337,3 +337,13 @@ button {
   text-decoration: underline;
   margin-top: 10px;
 }
+#switch-mode-text {
+  text-align: center;
+  margin-top: 14px;
+}
+
+#switch-mode-link {
+  color: #c2641d;
+  cursor: pointer;
+  text-decoration: underline;
+}

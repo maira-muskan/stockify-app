@@ -201,6 +201,31 @@ let currentPartId = null;
 let currentAction = null;
 let selectMode = false;
 
+const authTitle = document.getElementById("auth-title");
+const switchModeText = document.getElementById("switch-mode-text");
+let authMode = "signin";
+
+function setAuthMode(mode) {
+  authMode = mode;
+  if (mode === "signin") {
+    authTitle.textContent = "Sign in";
+    loginBtn.textContent = "Sign in";
+    switchModeText.innerHTML = 'New here? <span id="switch-mode-link">Create account</span>';
+    if (forgotPasswordLink) forgotPasswordLink.classList.remove("hidden");
+  } else {
+    authTitle.textContent = "Create account";
+    loginBtn.textContent = "Create account";
+    switchModeText.innerHTML = 'Already have an account? <span id="switch-mode-link">Sign in</span>';
+    if (forgotPasswordLink) forgotPasswordLink.classList.add("hidden");
+  }
+}
+
+switchModeText.addEventListener("click", function (event) {
+  if (event.target.id === "switch-mode-link") {
+    setAuthMode(authMode === "signin" ? "create" : "signin");
+  }
+});
+
 loginBtn.addEventListener("click", async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection. Please connect and try again.");
@@ -223,31 +248,45 @@ loginBtn.addEventListener("click", async function () {
   const email = emailInput.value.trim();
   const password = passwordInput.value;
 
-  try {
-    await createUserWithEmailAndPassword(window.auth, email, password);
-    showPopup("Account created successfully!", function () {
-      loginScreen.classList.add("hidden");
-      homeScreen.classList.remove("hidden");
-      renderParts();
-    });
-  } catch (error) {
-    if (error.code === "auth/email-already-in-use") {
-      try {
-        await signInWithEmailAndPassword(window.auth, email, password);
-        showPopup("Sign in successful!", function () {
-          loginScreen.classList.add("hidden");
-          homeScreen.classList.remove("hidden");
-          renderParts();
-        });
-      } catch (signInError) {
+  if (authMode === "signin") {
+    // Existing users only
+    try {
+      await signInWithEmailAndPassword(window.auth, email, password);
+      showPopup("Sign in successful!", function () {
+        loginScreen.classList.add("hidden");
+        homeScreen.classList.remove("hidden");
+        renderParts();
+      });
+    } catch (error) {
+      if (error.code === "auth/invalid-email") {
+        showPopup("Please enter a valid email.");
+      } else if (error.code === "auth/too-many-requests") {
+        showPopup("Too many attempts. Please try again later.");
+      } else {
+        // wrong password, no account, or invalid credentials
         showPopup("Wrong email or password.");
       }
-    } else if (error.code === "auth/weak-password") {
-      showPopup("Password must be at least 6 characters.");
-    } else if (error.code === "auth/invalid-email") {
-      showPopup("Please enter a valid email.");
-    } else {
-      showPopup("Error: " + error.message);
+    }
+  } else {
+    // New users only
+    try {
+      await createUserWithEmailAndPassword(window.auth, email, password);
+      showPopup("Account created successfully!", function () {
+        loginScreen.classList.add("hidden");
+        homeScreen.classList.remove("hidden");
+        renderParts();
+      });
+    } catch (error) {
+      if (error.code === "auth/email-already-in-use") {
+        showPopup("This email already has an account. Please sign in.");
+        setAuthMode("signin");
+      } else if (error.code === "auth/weak-password") {
+        showPopup("Password must be at least 6 characters.");
+      } else if (error.code === "auth/invalid-email") {
+        showPopup("Please enter a valid email.");
+      } else {
+        showPopup("Error: " + error.message);
+      }
     }
   }
 });
@@ -553,9 +592,13 @@ logoutBtn.addEventListener("click", async function () {
   loginScreen.classList.remove("hidden");
   document.getElementById("email").value = "";
   document.getElementById("password").value = "";
+  setAuthMode("signin");
 });
+
+// Stay signed in: Firebase remembers the user, so show the right screen on load.
 function startAuthListener() {
   if (!window.auth) {
+    // index.html's Firebase setup hasn't finished yet, try again shortly
     setTimeout(startAuthListener, 50);
     return;
   }
