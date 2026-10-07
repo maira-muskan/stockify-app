@@ -55,6 +55,7 @@
         <span><span id="sales-count" class="stat-value">0</span> sales</span>
         <span><span id="sales-amount" class="stat-value">0</span> revenue</span>
         <span><span id="total-profit" class="stat-value stat-profit">0</span> profit</span>
+         <button id="reset-summary-btn" aria-label="Reset stats">🗑️</button>
       </div>
 
       <div id="parts-list"></div>
@@ -108,6 +109,12 @@
   <button id="edit-save-btn" type="button">Save changes</button>
   <button id="edit-delete-btn" type="button">Delete part</button>
   <button id="edit-cancel-btn" type="button">Cancel</button>
+</div>
+
+<div id="confirm-popup" class="hidden">
+  <p id="confirm-message">Are you sure?</p>
+  <button id="confirm-yes-btn">Yes</button>
+  <button id="confirm-no-btn">No</button>
 </div>
 
   <div id="stock-popup" class="hidden">

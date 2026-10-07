@@ -5,13 +5,60 @@ function showPopup(message, callback) {
   popupText.textContent = message;
   popup.classList.remove("hidden");
 
-  setTimeout(function () {
-    popup.classList.add("hidden");
-    if (callback) callback();
-  }, 1500);
+  return new Promise(function (resolve) {
+    setTimeout(function () {
+      popup.classList.add("hidden");
+      if (callback) callback();
+      resolve();
+    }, 1500);
+  });
 }
 
-// Loads one part (only if it belongs to the signed-in user)
+function guardClick(btn, handler, getLabel) {
+  btn.addEventListener("click", async function () {
+    if (btn.dataset.busy === "true") return;
+
+    btn.dataset.busy = "true";
+    const originalLabel = btn.textContent;
+    btn.textContent = "Loading...";
+    btn.classList.add("is-loading");
+    btn.disabled = true;
+
+    try {
+      await handler();
+    } finally {
+      btn.dataset.busy = "false";
+      btn.textContent = getLabel ? getLabel() : originalLabel;
+      btn.classList.remove("is-loading");
+      btn.disabled = false;
+    }
+  });
+}
+
+function askConfirm(message) {
+  return new Promise(function (resolve) {
+    document.getElementById("confirm-message").textContent = message;
+    const confirmPopup = document.getElementById("confirm-popup");
+    const yesBtn = document.getElementById("confirm-yes-btn");
+    const noBtn = document.getElementById("confirm-no-btn");
+
+    confirmPopup.classList.remove("hidden");
+
+    function cleanup(result) {
+      confirmPopup.classList.add("hidden");
+      yesBtn.removeEventListener("click", onYes);
+      noBtn.removeEventListener("click", onNo);
+      resolve(result);
+    }
+
+    function onYes() { cleanup(true); }
+    function onNo() { cleanup(false); }
+
+    yesBtn.addEventListener("click", onYes);
+    noBtn.addEventListener("click", onNo);
+  });
+}
+
 async function getPartById(id) {
   const snap = await getDoc(doc(window.db, "parts", id));
   if (!snap.exists()) return null;
@@ -49,11 +96,22 @@ async function renderParts() {
       const card = document.createElement("div");
       card.className = "part-card";
       card.innerHTML = `
-        <strong class="part-name-btn" data-id="${id}">${part.name}</strong><br>
-        Quantity: ${part.quantity}<br>
-        Buy: ${part.buyPrice} | Sell: ${part.sellPrice}<br>
-        <button class="stock-in-btn" data-id="${id}">+ Stock in</button>
-        <button class="stock-out-btn" data-id="${id}">- Stock out</button>
+        <div class="part-info">
+          <span class="part-name">${part.name}</span>
+          <button class="edit-icon-btn" data-id="${id}" aria-label="Edit part">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+  </svg>
+</button>
+          <br>
+          Quantity: ${part.quantity}<br>
+          Buy: ${part.buyPrice} | Sell: ${part.sellPrice}
+        </div>
+        <div class="part-buttons">
+          <button class="stock-in-btn" data-id="${id}">Stock in</button>
+          <button class="stock-out-btn" data-id="${id}">Stock out</button>
+        </div>
       `;
       partsListEl.appendChild(card);
     });
@@ -94,7 +152,6 @@ async function openStockPopup(title) {
   }
 }
 
-// Counts sales (stock-out transactions), adds up the money received and the profit
 async function renderSummary() {
   const salesCountEl = document.getElementById("sales-count");
   const salesAmountEl = document.getElementById("sales-amount");
@@ -228,6 +285,7 @@ const editCancelBtn = document.getElementById("edit-cancel-btn");
 
 const clearHistoryBtn = document.getElementById("clear-history-btn");
 const deleteSelectedBtn = document.getElementById("delete-selected-btn");
+const resetSummaryBtn = document.getElementById("reset-summary-btn");
 
 const logoutBtn = document.getElementById("logout-btn");
 const forgotPasswordLink = document.getElementById("forgot-password-link");
@@ -261,7 +319,7 @@ switchModeText.addEventListener("click", function (event) {
   }
 });
 
-loginBtn.addEventListener("click", async function () {
+guardClick(loginBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection. Please connect and try again.");
     return;
@@ -284,10 +342,9 @@ loginBtn.addEventListener("click", async function () {
   const password = passwordInput.value;
 
   if (authMode === "signin") {
-    // Existing users only
     try {
       await signInWithEmailAndPassword(window.auth, email, password);
-      showPopup("Sign in successful!", function () {
+      await showPopup("Sign in successful!", function () {
         loginScreen.classList.add("hidden");
         homeScreen.classList.remove("hidden");
         renderParts();
@@ -298,15 +355,13 @@ loginBtn.addEventListener("click", async function () {
       } else if (error.code === "auth/too-many-requests") {
         showPopup("Too many attempts. Please try again later.");
       } else {
-        // wrong password, no account, or invalid credentials
         showPopup("Wrong email or password.");
       }
     }
   } else {
-    // New users only
     try {
       await createUserWithEmailAndPassword(window.auth, email, password);
-      showPopup("Account created successfully!", function () {
+      await showPopup("Account created successfully!", function () {
         loginScreen.classList.add("hidden");
         homeScreen.classList.remove("hidden");
         renderParts();
@@ -324,10 +379,12 @@ loginBtn.addEventListener("click", async function () {
       }
     }
   }
+}, function () {
+  return authMode === "signin" ? "Sign in" : "Create account";
 });
 
 if (forgotPasswordLink) {
-  forgotPasswordLink.addEventListener("click", async function () {
+  guardClick(forgotPasswordLink, async function () {
     if (!navigator.onLine) {
       showPopup("No internet connection.");
       return;
@@ -361,7 +418,7 @@ partCancelBtn.addEventListener("click", function () {
   partPopup.classList.add("hidden");
 });
 
-partSaveBtn.addEventListener("click", async function () {
+guardClick(partSaveBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection.");
     return;
@@ -417,17 +474,20 @@ partsList.addEventListener("click", async function (event) {
     openStockPopup("Stock out");
   }
 
-  if (event.target.classList.contains("part-name-btn")) {
-    currentPartId = event.target.dataset.id;
+  const editBtn = event.target.closest(".edit-icon-btn");
+  if (editBtn) {
+    currentPartId = editBtn.dataset.id;
 
     try {
       const part = await getPartById(currentPartId);
-      if (part) {
-        editNameInput.value = part.name;
-        editQtyInput.value = part.quantity;
-        editBuyInput.value = part.buyPrice;
-        editSellInput.value = part.sellPrice;
+      if (!part) {
+        showPopup("Part not found.");
+        return;
       }
+      editNameInput.value = part.name;
+      editQtyInput.value = part.quantity;
+      editBuyInput.value = part.buyPrice;
+      editSellInput.value = part.sellPrice;
     } catch (error) {
       showPopup("Could not load part.");
       return;
@@ -441,7 +501,7 @@ stockCancelBtn.addEventListener("click", function () {
   stockPopup.classList.add("hidden");
 });
 
-stockConfirmBtn.addEventListener("click", async function () {
+guardClick(stockConfirmBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection.");
     return;
@@ -517,7 +577,7 @@ editCancelBtn.addEventListener("click", function () {
   editPopup.classList.add("hidden");
 });
 
-editSaveBtn.addEventListener("click", async function () {
+guardClick(editSaveBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection.");
     return;
@@ -549,13 +609,13 @@ editSaveBtn.addEventListener("click", async function () {
   editPopup.classList.add("hidden");
 });
 
-editDeleteBtn.addEventListener("click", async function () {
+guardClick(editDeleteBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection.");
     return;
   }
 
-  const confirmDelete = confirm("Delete this part? This cannot be undone.");
+  const confirmDelete = await askConfirm("Are you sure you want to delete this?");
   if (!confirmDelete) return;
 
   try {
@@ -580,7 +640,7 @@ clearHistoryBtn.addEventListener("click", function () {
   deleteSelectedBtn.classList.toggle("hidden", !selectMode);
 });
 
-deleteSelectedBtn.addEventListener("click", async function () {
+guardClick(deleteSelectedBtn, async function () {
   if (!navigator.onLine) {
     showPopup("No internet connection.");
     return;
@@ -592,7 +652,7 @@ deleteSelectedBtn.addEventListener("click", async function () {
     return;
   }
 
-  const confirmDelete = confirm("Delete " + checkedBoxes.length + " transaction(s)?");
+  const confirmDelete = await askConfirm("Are you sure you want to delete " + checkedBoxes.length + " transaction(s)?");
   if (!confirmDelete) return;
 
   try {
@@ -610,6 +670,31 @@ deleteSelectedBtn.addEventListener("click", async function () {
   renderSummary();
 });
 
+guardClick(resetSummaryBtn, async function () {
+  if (!navigator.onLine) {
+    showPopup("No internet connection.");
+    return;
+  }
+
+  const confirmReset = await askConfirm("This will permanently delete all sales history and reset your stats. Continue?");
+  if (!confirmReset) return;
+
+  try {
+    const q = query(collection(window.db, "transactions"), where("userId", "==", window.auth.currentUser.uid));
+    const snapshot = await getDocs(q);
+
+    for (const docSnap of snapshot.docs) {
+      await deleteDoc(doc(window.db, "transactions", docSnap.id));
+    }
+  } catch (error) {
+    showPopup("Could not reset: " + error.message);
+    return;
+  }
+
+  renderSummary();
+  showPopup("Stats reset.");
+});
+
 window.addEventListener("popstate", function () {
   if (!historyScreen.classList.contains("hidden")) {
     historyScreen.classList.add("hidden");
@@ -617,7 +702,7 @@ window.addEventListener("popstate", function () {
   }
 });
 
-logoutBtn.addEventListener("click", async function () {
+guardClick(logoutBtn, async function () {
   try {
     await signOut(window.auth);
   } catch (error) {
@@ -634,10 +719,8 @@ logoutBtn.addEventListener("click", async function () {
   document.getElementById("total-profit").textContent = "0";
 });
 
-// Stay signed in: Firebase remembers the user, so show the right screen on load.
 function startAuthListener() {
   if (!window.auth) {
-    // index.html's Firebase setup hasn't finished yet, try again shortly
     setTimeout(startAuthListener, 50);
     return;
   }
