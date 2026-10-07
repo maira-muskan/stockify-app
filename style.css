@@ -464,3 +464,45 @@ button:disabled {
   cursor: pointer;
   padding: 0 4px;
 }
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+input, select, textarea, button {
+  font-size: 16px;
+  max-width: 100%;
+}
+
+button {
+  min-height: 44px;
+}
+
+.part-card .part-actions button {
+  font-size: 13px;
+}
+
+#part-popup, #edit-popup, #stock-popup, #confirm-popup {
+  max-width: calc(100vw - 32px);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 400px) {
+  #sales-summary {
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .part-card .part-actions {
+    width: 84px;
+  }
+}
