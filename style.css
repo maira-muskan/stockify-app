@@ -52,7 +52,7 @@ button {
   padding: 12px 20px;
   border-radius: 8px;
   font-size: 14px;
-  z-index: 50;
+  z-index: 1200;
 }
 
 .floating-icon {
@@ -166,16 +166,50 @@ button {
 #edit-popup,
 #stock-popup {
   position: fixed;
-  bottom: 0;
+  top: auto;
   left: 0;
   right: 0;
-  background: #f7f6f4;
-  border-radius: 20px 20px 0 0;
-  padding: 20px;
-  box-shadow: 0 -4px 14px rgba(0,0,0,0.15);
-  z-index: 10;
-  max-width: 400px;
-  margin: 0 auto;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 90vh;
+  margin: 0;
+  transform: none;
+  box-sizing: border-box;
+  background: #161616;
+  color: #eeeeee;
+  border-radius: 18px 18px 0 0;
+  border-top: 0.5px solid #3a3a3a;
+  padding: 20px max(16px, calc((100vw - 480px) / 2)) 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* huge spread = dims the page behind, page stays visible */
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.62);
+  z-index: 1000;
+}
+
+#part-popup label,
+#edit-popup label,
+#stock-popup label {
+  color: #a3a09a;
+}
+
+#part-popup input,
+#edit-popup input,
+#stock-popup input {
+  background: #1e1e1e;
+  color: #eeeeee;
+  border-color: #333;
+}
+
+#part-popup h2,
+#edit-popup h2,
+#stock-popup h2 {
+  color: #e0812c;
+}
+
+#stock-popup-info {
+  word-break: break-word;
 }
 
 #part-popup button,
@@ -370,12 +404,6 @@ button:disabled {
     background: #333;
   }
 
-  #part-popup,
-  #edit-popup,
-  #stock-popup {
-    background: #121212;
-  }
-
   #part-cancel-btn,
   #edit-cancel-btn,
   #stock-cancel-btn {
@@ -424,11 +452,13 @@ button:disabled {
   background: #1e1e1e;
   color: #eeeeee;
   border-radius: 20px 20px 0 0;
-  padding: 20px;
-  box-shadow: 0 -4px 14px rgba(0,0,0,0.3);
-  z-index: 20;
-  max-width: 400px;
-  margin: 0 auto;
+  padding: 20px max(16px, calc((100vw - 480px) / 2)) 24px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.62);
+  z-index: 1100;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
   text-align: center;
 }
 
@@ -486,12 +516,7 @@ button {
   min-height: 44px;
 }
 
-.part-card .part-actions button {
-  font-size: 13px;
-}
-
-#part-popup, #edit-popup, #stock-popup, #confirm-popup {
-  max-width: calc(100vw - 32px);
+#confirm-popup {
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -500,9 +525,5 @@ button {
   #sales-summary {
     flex-wrap: wrap;
     font-size: 12px;
-  }
-
-  .part-card .part-actions {
-    width: 84px;
   }
 }

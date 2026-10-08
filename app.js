@@ -59,6 +59,13 @@ function askConfirm(message) {
   });
 }
 
+// Only one box (Add part, Edit part, Stock in/out) may be open at a time
+function closeAllBoxes() {
+  [partPopup, editPopup, stockPopup].forEach(function (box) {
+    box.classList.add("hidden");
+  });
+}
+
 async function getPartById(id) {
   const snap = await getDoc(doc(window.db, "parts", id));
   if (!snap.exists()) return null;
@@ -69,7 +76,6 @@ async function getPartById(id) {
 
 async function renderParts() {
   const partsListEl = document.getElementById("parts-list");
-  const totalQtyNumber = document.getElementById("total-quantity-number");
 
   if (!navigator.onLine) {
     partsListEl.innerHTML = "<p>No internet connection. Please reconnect and reload.</p>";
@@ -116,7 +122,6 @@ async function renderParts() {
       partsListEl.appendChild(card);
     });
 
-    totalQtyNumber.textContent = count;
     renderSummary();
   } catch (error) {
     partsListEl.innerHTML = "<p>Could not load parts. Please try again.</p>";
@@ -134,6 +139,7 @@ async function openStockPopup(title) {
   } else {
     priceePaidSection.classList.add("hidden");
   }
+  closeAllBoxes();
   stockPopup.classList.remove("hidden");
 
   try {
@@ -142,7 +148,7 @@ async function openStockPopup(title) {
       stockPopupInfo.textContent = "Part not found.";
       return;
     }
-    stockPopupInfo.textContent = part.name + " — Current quantity: " + part.quantity;
+    stockPopupInfo.textContent = part.name + " (Current quantity: " + part.quantity + ")";
     if (currentAction === "out") {
       pricePaidInput.value = part.sellPrice;
     }
@@ -155,7 +161,7 @@ async function openStockPopup(title) {
 async function renderSummary() {
   const salesCountEl = document.getElementById("sales-count");
   const salesAmountEl = document.getElementById("sales-amount");
-  const totalProfitEl = document.getElementById("total-profit");
+  const profitEl = document.getElementById("total-quantity-number");
 
   const user = window.auth.currentUser;
   if (!user || !navigator.onLine) return;
@@ -178,8 +184,7 @@ async function renderSummary() {
 
     salesCountEl.textContent = sales;
     salesAmountEl.textContent = amount.toLocaleString();
-    totalProfitEl.textContent = profit.toLocaleString();
-    totalProfitEl.classList.toggle("negative", profit < 0);
+    profitEl.textContent = profit.toLocaleString();
   } catch (error) {
     console.log("renderSummary error:", error);
   }
@@ -411,6 +416,7 @@ if (forgotPasswordLink) {
 }
 
 addPartBtn.addEventListener("click", function () {
+  closeAllBoxes();
   partPopup.classList.remove("hidden");
 });
 
@@ -493,6 +499,7 @@ partsList.addEventListener("click", async function (event) {
       return;
     }
 
+    closeAllBoxes();
     editPopup.classList.remove("hidden");
   }
 });
@@ -695,6 +702,35 @@ guardClick(resetSummaryBtn, async function () {
   showPopup("Stats reset.");
 });
 
+// Tap the dimmed area outside an open sheet (Add part, Edit part, Stock in/out) to close it without saving.
+// The tap only closes the sheet: nothing behind it gets pressed.
+document.addEventListener("click", function (event) {
+  if (event.target.closest("#popup")) return;
+
+  const confirmPopup = document.getElementById("confirm-popup");
+  if (confirmPopup && !confirmPopup.classList.contains("hidden")) {
+    if (!confirmPopup.contains(event.target)) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    return;
+  }
+
+  const sheets = [stockPopup, editPopup, partPopup];
+  for (const box of sheets) {
+    if (box.classList.contains("hidden")) continue;
+
+    if (!box.contains(event.target)) {
+      event.stopPropagation();
+      event.preventDefault();
+      if (!box.querySelector('[data-busy="true"]')) {
+        box.classList.add("hidden");
+      }
+    }
+    return;
+  }
+}, true);
+
 window.addEventListener("popstate", function () {
   if (!historyScreen.classList.contains("hidden")) {
     historyScreen.classList.add("hidden");
@@ -716,7 +752,7 @@ guardClick(logoutBtn, async function () {
   setAuthMode("signin");
   document.getElementById("sales-count").textContent = "0";
   document.getElementById("sales-amount").textContent = "0";
-  document.getElementById("total-profit").textContent = "0";
+  document.getElementById("total-quantity-number").textContent = "0";
 });
 
 function startAuthListener() {
